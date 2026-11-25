@@ -115,6 +115,22 @@ def test_include_leaves_out_the_repository_widget_without_a_repository(tmp_path:
     )
 
 
+def test_include_loads_the_quarto_2_script_only_for_quarto_2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    config = write_config(tmp_path)
+    monkeypatch.delenv("GREAT_DOCS_QUARTO", raising=False)
+    quarto_1: dict[str, Any] = {}
+    scripts.include(config, quarto_1, tmp_path, has_repository=False)
+    assert not any("quarto2-nav.js" in entry for entry in _includes(quarto_1, "include-after-body"))
+
+    monkeypatch.setenv("GREAT_DOCS_QUARTO", "q2")
+    quarto_2: dict[str, Any] = {}
+    scripts.include(config, quarto_2, tmp_path, has_repository=False)
+    after_body = _includes(quarto_2, "include-after-body")
+    assert _position(after_body, "quarto2-nav.js") < _position(after_body, "sidebar-float.js")
+
+
 def test_include_puts_data_before_the_script_that_reads_it(tmp_path: Path):
     config = write_config(tmp_path, {"sidebar_filter": {"min_items": 5}, "dark_mode_toggle": False})
     quarto_config: dict[str, Any] = {}
