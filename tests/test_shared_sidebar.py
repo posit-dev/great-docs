@@ -518,6 +518,55 @@ def test_for_page_without_its_own_link_only_rebases():
     assert nav == _NAV
 
 
+# Quarto 2 (experimental) writes links from the page and other section markup
+_Q2_NAV = """
+<ul class="list-unstyled mt-1">
+  <li class="sidebar-item">
+    <div class="sidebar-item-container">
+      <a href="index.html" class="sidebar-item-text sidebar-link"><span class="menu-text">Index</span></a>
+    </div>
+  </li>
+  <li class="sidebar-item sidebar-item-section">
+    <div class="sidebar-item-container">
+      <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-0" aria-controls="quarto-sidebar-section-0" aria-expanded="false"><span class="menu-text" id="quarto-sidebar-section-0-label">Deep</span></button>
+    </div>
+    <ul id="quarto-sidebar-section-0" aria-labelledby="quarto-sidebar-section-0-label" class="collapse list-unstyled sidebar-section depth1">
+      <li class="sidebar-item">
+        <div class="sidebar-item-container">
+          <a href="sub/b.html" class="sidebar-item-text sidebar-link"><span class="menu-text">B</span></a>
+          <a href="sub/c.html#top" class="sidebar-item-text sidebar-link"><span class="menu-text">C</span></a>
+          <a href="https://example.com/a.html" class="sidebar-item-text sidebar-link">Elsewhere</a>
+        </div>
+      </li>
+    </ul>
+  </li>
+</ul>
+"""
+
+
+def test_for_page_reads_quarto_2_links_and_sections():
+    script = _load_script()
+    nav = script._for_page(_Q2_NAV, "reference/gd-sidebar-reference.html", "reference/sub/b.html")
+
+    assert 'href="../index.html" class="sidebar-item-text sidebar-link">' in nav
+    assert 'href="b.html" class="sidebar-item-text sidebar-link active">' in nav
+    assert 'href="c.html#top" class="sidebar-item-text sidebar-link">' in nav
+    assert 'href="https://example.com/a.html"' in nav
+    assert 'class="collapse list-unstyled sidebar-section depth1 show">' in nav
+    assert "collapsed" not in nav
+    assert 'aria-expanded="false"' not in nav
+
+
+def test_for_page_marks_a_quarto_2_link_in_the_templates_directory():
+    script = _load_script()
+    nav = script._for_page(_Q2_NAV, "reference/gd-sidebar-reference.html", "reference/index.html")
+
+    assert 'href="index.html" class="sidebar-item-text sidebar-link active">' in nav
+    assert nav.count(" active") == 1
+    assert 'href="sub/b.html" class="sidebar-item-text sidebar-link">' in nav
+    assert 'sidebar-section depth1">' in nav
+
+
 # ── Rendering with Quarto ────────────────────────────────────────────────────
 
 _needs_quarto = pytest.mark.skipif(
