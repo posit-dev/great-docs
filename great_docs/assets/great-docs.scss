@@ -1481,13 +1481,15 @@ summary::marker {
     opacity: 1;
 }
 
-#navbarCollapse > ul.navbar-nav.navbar-nav-scroll.me-auto > li > a:hover {
+/* The navbar's lists are matched without `.navbar-nav-scroll`, which Quarto 2 (experimental)
+   doesn't write. */
+#navbarCollapse > ul.navbar-nav.me-auto > li > a:hover {
     background-color: rgb(240, 112, 0);
     color: white;
     border-radius: 5px;
 }
 
-#navbarCollapse > ul.navbar-nav.navbar-nav-scroll.me-auto > li > a {
+#navbarCollapse > ul.navbar-nav.me-auto > li > a {
     color: var(--gd-navbar-text);
     font-weight: bold;
 }
@@ -2377,7 +2379,7 @@ body.quarto-light .navbar .gd-navbar-icon:hover {
     border-color: rgba(0, 0, 0, 0.25);
 }
 
-#navbarCollapse > ul.navbar-nav.navbar-nav-scroll.ms-auto > li {
+#navbarCollapse > ul.navbar-nav.ms-auto > li {
     padding-right: 5px
 }
 
@@ -3331,7 +3333,7 @@ html.quarto-dark .gd-badge-deprecated,
 }
 
 /* Allow horizontal scrolling for navbars with many items */
-#navbarCollapse > ul.navbar-nav.navbar-nav-scroll.me-auto {
+#navbarCollapse > ul.navbar-nav.me-auto {
     text-wrap: nowrap;
     overflow-x: auto !important;
 }
@@ -4467,11 +4469,11 @@ body.quarto-dark .version-badge {
     background-color: rgba(255, 255, 255, 0.1);
 }
 
-body.quarto-dark #navbarCollapse > ul.navbar-nav.navbar-nav-scroll.me-auto > li > a {
+body.quarto-dark #navbarCollapse > ul.navbar-nav.me-auto > li > a {
     color: #e0e0e0;
 }
 
-body.quarto-dark #navbarCollapse > ul.navbar-nav.navbar-nav-scroll.me-auto > li > a:hover {
+body.quarto-dark #navbarCollapse > ul.navbar-nav.me-auto > li > a:hover {
     background-color: rgb(240, 112, 0);
     color: white;
 }
