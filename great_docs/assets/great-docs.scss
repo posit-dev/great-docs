@@ -708,15 +708,16 @@ $label-mcp-completions-color: #911eb4;
 $label-mcp-instructions-color: #f58231;
 
 .mcp-capability-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
   max-width: 28rem;
   margin-bottom: 1.5rem;
+  padding-top: 10px;
 
+  // Quarto 1 puts the tiles in a paragraph; Quarto 2 (experimental) doesn't
   > p {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-    margin: 0;
-    padding-top: 10px;
+    display: contents;
   }
 }
 
