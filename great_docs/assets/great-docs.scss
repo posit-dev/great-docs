@@ -47,10 +47,11 @@ $member-groups: "section:is(.doc-attributes, .doc-classes, .doc-type-aliases, .d
 // the path from the site root, so index links end in `/index.html`, and the
 // leading slash excludes object pages whose names end in `index`. On a served
 // site, Quarto's navigation script strips `index.html`, leaving links that end
-// in `/`.
+// in `/`. Quarto 2 (experimental) writes links relative to the page and leaves
+// them alone, so an index link from a page beside it is just `index.html`.
 $ref-page: "body:is(.doc-reference, .doc-api-page)";
 $sidebar-section-header: "#quarto-sidebar .sidebar-item-section > .sidebar-item-container > .sidebar-item-text:not([href])";
-$ref-index-links: 'a.sidebar-item-text:is([href$="/index.html"], [href$="/"])';
+$ref-index-links: 'a.sidebar-item-text:is([href$="/index.html"], [href$="/"], [href="index.html"])';
 
 a {
    text-decoration: none;
