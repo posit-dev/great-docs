@@ -24,6 +24,7 @@ __all__ = [
     "FILTER",
     "POST_RENDER_SCRIPT",
     "SETTINGS_KEY",
+    "STYLESHEET",
     "adapt_config",
     "definition_lists",
     "prepare_pages",
@@ -37,6 +38,9 @@ SETTINGS_KEY = "gd-quarto2"
 
 POST_RENDER_SCRIPT = "scripts/quarto2-post-render.py"
 """The post-render script that finishes the pages Quarto 2 writes"""
+
+STYLESHEET = "quarto2.scss"
+"""The stylesheet with the Quarto 1 theme rules that Quarto 2 lacks"""
 
 _ASSETS = Path(__file__).parents[1] / "assets"
 _SIDEBAR_KEY = re.compile(r"^sidebar:", re.MULTILINE)
@@ -66,6 +70,8 @@ def adapt_config(
     - Quarto 1 writes the navbar logo twice, for light and dark mode, and Great Docs' script
       points the dark copy at `logo-dark`. Quarto 2 writes it once, so the two logos become a
       `logo` with `light` and `dark` paths.
+    - Quarto 2's theme lacks some of Quarto 1's rules, such as the space above the page's
+      content, so a stylesheet with them comes just before Great Docs' own in each theme.
 
     Applying it again to its result changes nothing.
 
@@ -105,10 +111,16 @@ def adapt_config(
                 navbar["logo"] = {"light": navbar["logo"], "dark": dark}
 
     html: Any = adapted.get("format", {}).get("html")
-    if isinstance(html, dict) and "shift-heading-level-by" in html:
-        settings["shift-heading-level-by"] = cast("dict[str, Any]", html).pop(
-            "shift-heading-level-by"
-        )
+    if isinstance(html, dict):
+        html = cast("dict[str, Any]", html)
+        if "shift-heading-level-by" in html:
+            settings["shift-heading-level-by"] = html.pop("shift-heading-level-by")
+        theme: Any = html.get("theme")
+        if isinstance(theme, dict):
+            for mode, mode_theme in cast("dict[str, Any]", theme).items():
+                theme[mode] = _with_stylesheet(mode_theme)
+        elif theme is not None:
+            html["theme"] = _with_stylesheet(theme)
     adapted[SETTINGS_KEY] = settings
 
     filters = quarto_yml.entries(adapted, "filters")
@@ -127,7 +139,7 @@ def prepare_pages(build_dir: Path) -> None:
     """
     Change a build directory's pages for a Quarto 2 render
 
-    Copy the post-render script that `adapt_config` registers. Quarto 2 picks a page's
+    Copy the post-render script and the stylesheet that `adapt_config` adds. Quarto 2 picks a page's
     sidebar by `site-sidebar`, and shows none on a page with a named `sidebar`, so rename
     each named `sidebar` in page front matter and directory metadata. Leave `sidebar: false`
     alone. Quarto 2 also shows no navbar on a page with `navbar: true`, which in Quarto 1
@@ -146,6 +158,7 @@ def prepare_pages(build_dir: Path) -> None:
     script = build_dir / POST_RENDER_SCRIPT
     script.parent.mkdir(parents=True, exist_ok=True)
     _ = shutil.copyfile(_ASSETS / "quarto2-post-render.py", script)
+    _ = shutil.copyfile(_ASSETS / STYLESHEET, build_dir / STYLESHEET)
 
     for directory, subdirs, files in os.walk(build_dir):
         subdirs[:] = [
@@ -283,6 +296,17 @@ def _copy(value: Any) -> Any:
     if isinstance(value, list):
         return [_copy(item) for item in cast("list[Any]", value)]
     return value
+
+
+def _with_stylesheet(theme: Any) -> list[Any]:
+    """
+    Return a theme list with `STYLESHEET` just before `great-docs.scss`, or at the end
+    """
+    themes = [theme] if isinstance(theme, str) else list(cast("list[Any]", theme))
+    if STYLESHEET not in themes:
+        position = themes.index("great-docs.scss") if "great-docs.scss" in themes else len(themes)
+        themes.insert(position, STYLESHEET)
+    return themes
 
 
 def _social_cards(website: dict[str, Any], *, native: bool) -> dict[str, Any] | None:
