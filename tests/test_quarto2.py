@@ -277,6 +277,41 @@ class TestPostRender:
         )
         assert _post_render().place_homepage_sidebar(html) == html
 
+    def test_puts_navbar_link_text_in_a_menu_text_span(self):
+        html = (
+            '<script>s = `<nav class="navbar"><a class="nav-link">x</a></nav>`</script>'
+            '<nav class="navbar navbar-expand-lg"><ul>'
+            '<li class="nav-item"><a href="a.html" class="nav-link active">Guide</a></li>'
+            '<li class="nav-item"><a href="b.html" class="nav-link"><i class="bi bi-git"></i> Code</a></li>'
+            '<li class="nav-item"><a href="c.html" class="nav-link"><i class="bi bi-x"></i></a></li>'
+            '<li class="nav-item"><a href="d.html" class="nav-link">'
+            '<span class="menu-text d-lg-none">D</span></a></li>'
+            '<li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#">More</a>'
+            '<ul><li><a href="e.html" class="dropdown-item">E</a></li></ul></li>'
+            "</ul></nav>"
+            '<nav id="TOC"><a href="#s" class="nav-link">Section</a></nav>'
+        )
+        assert _post_render().wrap_navbar_text(html) == (
+            '<script>s = `<nav class="navbar"><a class="nav-link">x</a></nav>`</script>'
+            '<nav class="navbar navbar-expand-lg"><ul>'
+            '<li class="nav-item"><a href="a.html" class="nav-link active">'
+            '<span class="menu-text">Guide</span></a></li>'
+            '<li class="nav-item"><a href="b.html" class="nav-link"><i class="bi bi-git"></i> '
+            '<span class="menu-text">Code</span></a></li>'
+            '<li class="nav-item"><a href="c.html" class="nav-link"><i class="bi bi-x"></i></a></li>'
+            '<li class="nav-item"><a href="d.html" class="nav-link">'
+            '<span class="menu-text d-lg-none">D</span></a></li>'
+            '<li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#">'
+            '<span class="menu-text">More</span></a>'
+            '<ul><li><a href="e.html" class="dropdown-item">E</a></li></ul></li>'
+            "</ul></nav>"
+            '<nav id="TOC"><a href="#s" class="nav-link">Section</a></nav>'
+        )
+
+    def test_leaves_pages_without_a_navbar_alone(self):
+        html = '<nav id="TOC"><a href="#s" class="nav-link">Section</a></nav>'
+        assert _post_render().wrap_navbar_text(html) == html
+
     def test_root_page_gets_a_dot_prefix(self):
         assert _post_render().rewrite("<a href='/x.html'>x</a>", "") == ("<a href='./x.html'>x</a>")
 
