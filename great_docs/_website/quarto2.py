@@ -63,8 +63,9 @@ def adapt_config(
       rewrites them in each page.
     - Quarto 2 warns about a project that doesn't declare `quarto-required: "^2"`, so the
       configuration declares it.
-    - Quarto 2 ignores the navbar's `logo-dark` and writes a single logo for both color
-      modes, so the two logos become a `logo` with `light` and `dark` paths.
+    - Quarto 1 writes the navbar logo twice, for light and dark mode, and Great Docs' script
+      points the dark copy at `logo-dark`. Quarto 2 writes it once, so the two logos become a
+      `logo` with `light` and `dark` paths.
 
     Applying it again to its result changes nothing.
 
