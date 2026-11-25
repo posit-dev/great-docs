@@ -72,6 +72,8 @@ def adapt_config(
       `logo` with `light` and `dark` paths.
     - Quarto 2's theme lacks some of Quarto 1's rules, such as the space above the page's
       content, so a stylesheet with them comes just before Great Docs' own in each theme.
+    - Quarto 1 highlights code with the `arrow` style unless the site names another, while
+      Quarto 2 has its own default, so a site that names none gets `arrow`.
 
     Applying it again to its result changes nothing.
 
@@ -115,6 +117,8 @@ def adapt_config(
         html = cast("dict[str, Any]", html)
         if "shift-heading-level-by" in html:
             settings["shift-heading-level-by"] = html.pop("shift-heading-level-by")
+        if "syntax-highlighting" not in html and "highlight-style" not in html:
+            html["syntax-highlighting"] = "arrow"
         theme: Any = html.get("theme")
         if isinstance(theme, dict):
             for mode, mode_theme in cast("dict[str, Any]", theme).items():
