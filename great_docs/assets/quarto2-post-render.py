@@ -8,6 +8,9 @@ the rewriting. Script and style element contents, and comments, are left alone.
 
 Quarto 2 also leaves `.column-margin` content out of the page grid, so the homepage's
 metadata sidebar sits in the body column. This script puts it in the right margin.
+
+Quarto 2 writes navbar link text directly in the link, without the `.menu-text` span that
+Great Docs' scripts look for, so this script adds the span.
 """
 
 import os
@@ -26,6 +29,11 @@ _TOKEN = re.compile(
 _ATTRIBUTE = re.compile(r"""(\s(?:href|src|poster)=)(["'])/(?!/)""", re.IGNORECASE)
 _CLASS = re.compile(r"""\sclass=(["'])(?P<classes>[^"']*)\1""", re.IGNORECASE)
 _TAG_NAME = re.compile(r"<([a-zA-Z][a-zA-Z0-9-]*)")
+_NAV_LINK = re.compile(
+    r"""(<a\b[^>]*?\sclass=(["'])nav-link(?:\s[^"']*)?\2[^>]*>)(?P<content>.*?)(</a\s*>)""",
+    re.DOTALL | re.IGNORECASE,
+)
+_ICON = re.compile(r"\s*<i\b[^>]*>\s*</i>\s*", re.IGNORECASE)
 
 
 def _output_dir():
@@ -120,13 +128,51 @@ def place_homepage_sidebar(html):
     return _TOKEN.sub(token, html)
 
 
+def wrap_navbar_text(html):
+    """
+    Put each navbar link's text in a `.menu-text` span, as Quarto 1 does
+
+    Great Docs' scripts add the navbar icons and the keyboard menu's items from the span. A
+    leading icon stays outside it, and links that already have one, or have no text, are
+    left alone.
+    """
+    opening = next(
+        (
+            match
+            for match in _TOKEN.finditer(html)
+            if match.group("tag")
+            and _TAG_NAME.match(match.group("tag")).group(1).lower() == "nav"
+            and "navbar" in _classes(match.group("tag"))
+        ),
+        None,
+    )
+    if opening is None:
+        return html
+    end = html.find("</nav", opening.end())
+    if end == -1:
+        return html
+
+    def link(match):
+        content = match.group("content")
+        icon = _ICON.match(content)
+        lead = icon.group(0) if icon else ""
+        text = content[len(lead) :]
+        if "menu-text" in content or not text.strip():
+            return match.group(0)
+        return f'{match.group(1)}{lead}<span class="menu-text">{text}</span>{match.group(4)}'
+
+    navbar = _NAV_LINK.sub(link, html[opening.end() : end])
+    return html[: opening.end()] + navbar + html[end:]
+
+
 def main():
     output_dir = _output_dir()
     if not output_dir.is_dir():
         return
     for page in _rendered_pages(output_dir):
         html = page.read_text(encoding="utf-8")
-        finished = rewrite(place_homepage_sidebar(html), _offset(page, output_dir))
+        finished = wrap_navbar_text(place_homepage_sidebar(html))
+        finished = rewrite(finished, _offset(page, output_dir))
         if finished != html:
             page.write_text(finished, encoding="utf-8")
 
