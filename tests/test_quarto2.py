@@ -50,7 +50,7 @@ class TestAdaptConfig:
             "shift-heading-level-by": -1,
         }
         assert adapted["website"] == {"title": "Demo", "search": {"search-json": True}}
-        assert adapted["format"]["html"] == {"theme": "flatly"}
+        assert adapted["format"]["html"] == {"theme": ["flatly", "quarto2.scss"]}
         assert adapted["project"]["post-render"] == [
             "scripts/share-sidebars.py",
             "scripts/quarto2-post-render.py",
@@ -91,6 +91,24 @@ class TestAdaptConfig:
         assert quarto2.adapt_config(adapted) == adapted
         single = quarto2.adapt_config({"website": {"navbar": {"logo": "logo.svg"}}})
         assert single["website"]["navbar"] == {"logo": "logo.svg"}
+
+    def test_adds_the_stylesheet_before_great_docs_styles_in_each_theme(self):
+        themes = ["flatly", "great-docs.scss", "custom.scss"]
+        adapted = quarto2.adapt_config({"format": {"html": {"theme": themes}}})
+        assert adapted["format"]["html"]["theme"] == [
+            "flatly",
+            "quarto2.scss",
+            "great-docs.scss",
+            "custom.scss",
+        ]
+        assert quarto2.adapt_config(adapted) == adapted
+        modes = {"light": ["flatly", "great-docs.scss"], "dark": "darkly"}
+        adapted = quarto2.adapt_config({"format": {"html": {"theme": modes}}})
+        assert adapted["format"]["html"]["theme"] == {
+            "light": ["flatly", "quarto2.scss", "great-docs.scss"],
+            "dark": ["darkly", "quarto2.scss"],
+        }
+        assert "theme" not in quarto2.adapt_config({"format": {"html": {}}})["format"]["html"]
 
     def test_post_render_script_runs_last(self):
         quarto_config = {"project": {"post-render": ["scripts/quarto2-post-render.py", "b.py"]}}
@@ -134,6 +152,7 @@ class TestPreparePages:
         assert (tmp_path / "scripts" / "quarto2-post-render.py").read_bytes() == (
             ASSETS / "quarto2-post-render.py"
         ).read_bytes()
+        assert (tmp_path / "quarto2.scss").read_bytes() == (ASSETS / "quarto2.scss").read_bytes()
 
     def test_rewrites_definition_lists_in_the_body(self, tmp_path: Path):
         page = tmp_path / "a.qmd"
