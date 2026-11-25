@@ -255,12 +255,14 @@ end
 
 flatten.Table = plain_cells
 
--- Markdown consumers recognise `python` as the signature's language.
+-- Markdown consumers recognise `python` as the signature's language. The
+-- highlight spans written for Quarto 2 (experimental) are only for HTML.
 flatten.CodeBlock = function(block)
     if block.classes:includes("pythonsignature") then
         block.classes = block.classes:map(function(c)
             return c == "pythonsignature" and "python" or c
         end)
+        block.attributes["data-hl-spans"] = nil
         return block
     end
 end
