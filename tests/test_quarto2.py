@@ -81,6 +81,17 @@ class TestAdaptConfig:
         options = quarto2.adapt_config({"website": {"search": {"location": "navbar"}}})
         assert options["website"]["search"] == {"location": "navbar", "search-json": True}
 
+    def test_pairs_the_light_and_dark_navbar_logos(self):
+        navbar = {"logo": "logo.svg", "logo-dark": "logo-dark.svg", "logo-alt": "Demo"}
+        adapted = quarto2.adapt_config({"website": {"navbar": navbar}})
+        assert adapted["website"]["navbar"] == {
+            "logo": {"light": "logo.svg", "dark": "logo-dark.svg"},
+            "logo-alt": "Demo",
+        }
+        assert quarto2.adapt_config(adapted) == adapted
+        single = quarto2.adapt_config({"website": {"navbar": {"logo": "logo.svg"}}})
+        assert single["website"]["navbar"] == {"logo": "logo.svg"}
+
     def test_post_render_script_runs_last(self):
         quarto_config = {"project": {"post-render": ["scripts/quarto2-post-render.py", "b.py"]}}
         adapted = quarto2.adapt_config(quarto_config)
