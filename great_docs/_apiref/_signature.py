@@ -12,6 +12,7 @@ from great_docs.pandoc.components import Attr
 from great_docs.pandoc.inlines import Code, Span
 
 from ._format import escape_indents, escape_quotes, highlight_repr_value
+from ._signature_spans import signature_spans
 
 if TYPE_CHECKING:
     from great_docs.pandoc.blocks import BlockContent
@@ -282,7 +283,13 @@ def render_signature_block(
         # the quotes already inside that markup and wrap them a second time.
         return Div(Code(escape_quotes(escape_indents(marked))).html, attr)
 
+    from .._build import quarto
+
     text = "\n".join(text for text, _ in lines)
     # Quarto highlights `pythonsignature` with the grammar the build supplies,
-    # which marks callable names apart from parameter names.
-    return Div(CodeBlock(text, Attr(classes=["pythonsignature"])), attr)
+    # which marks callable names apart from parameter names. Quarto 2
+    # (experimental) reads no grammars, so the block lists its spans instead.
+    attributes: dict[str, str] = {}
+    if quarto.is_q2():
+        attributes["data-hl-spans"] = signature_spans(text).replace('"', '\\"')
+    return Div(CodeBlock(text, Attr(classes=["pythonsignature"], attributes=attributes)), attr)
