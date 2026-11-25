@@ -1,0 +1,24 @@
+// Rules from Quarto 1 that Quarto 2 (experimental) leaves out of its theme. Great Docs adds
+// this stylesheet before its own for a Quarto 2 build only.
+
+/*-- scss:rules --*/
+
+// The space between the navbar and the page's title, sidebar and table of contents, from
+// Quarto 1's `quarto-nav.scss`. Quarto 2 keeps only its exception for the sidebar glass.
+#quarto-content > * {
+  padding-top: 14px;
+}
+
+@media (max-width: 991.98px) {
+  #quarto-content > * {
+    padding-top: 0;
+  }
+
+  #quarto-content .subtitle {
+    padding-top: 14px;
+  }
+
+  #quarto-content section:first-of-type h2:first-of-type {
+    margin-top: 1rem;
+  }
+}
