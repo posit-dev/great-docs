@@ -6,8 +6,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .._build import quarto
-
 if TYPE_CHECKING:
     from .._apiref.spec import ReferenceSpec
     from ..config import Config
@@ -124,10 +122,8 @@ def configure(config: Config, quarto_config: dict[str, Any], spec: ReferenceSpec
     else:
         api_ref_config["parser"] = "numpy"
 
-    # Quarto 2 has no `syntax-definitions`, so it can't highlight `pythonsignature` blocks
-    signature_style = "plain" if quarto.is_q2() else config.callable_signatures_style
     api_ref_config["callable_signatures"] = {
-        "style": signature_style,
+        "style": config.callable_signatures_style,
         "wrap": config.callable_signatures_wrap,
     }
 
