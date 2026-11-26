@@ -74,6 +74,9 @@ def adapt_config(
       content, so a stylesheet with them comes just before Great Docs' own in each theme.
     - Quarto 1 highlights code with the `arrow` style unless the site names another, while
       Quarto 2 has its own default, so a site that names none gets `arrow`.
+    - Quarto 1 writes an HTML page's plots in the `retina` figure format unless the site names
+      another, while Quarto 2 writes `png`, which plotnine draws at half the size, so a site that
+      names none gets `retina`.
 
     Applying it again to its result changes nothing.
 
@@ -119,6 +122,9 @@ def adapt_config(
             settings["shift-heading-level-by"] = html.pop("shift-heading-level-by")
         if "syntax-highlighting" not in html and "highlight-style" not in html:
             html["syntax-highlighting"] = "arrow"
+        execute: Any = adapted.get("execute")
+        if "fig-format" not in html and not (isinstance(execute, dict) and "fig-format" in execute):
+            html["fig-format"] = "retina"
         theme: Any = html.get("theme")
         if isinstance(theme, dict):
             for mode, mode_theme in cast("dict[str, Any]", theme).items():
