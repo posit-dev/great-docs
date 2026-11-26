@@ -15,10 +15,15 @@ Great Docs' scripts look for, so this script adds the span.
 Quarto 1 gives the HTML tables of pandas and R data frames Bootstrap's table classes, and
 removes the border and styles pandas writes. Quarto 2 leaves them as written, so this script
 does the same.
+
+Quarto 1 copies the files an extension's HTML dependency stylesheet refers to with `url()`,
+such as fonts, next to the stylesheet in `site_libs`. Quarto 2 copies only the stylesheet, so
+this script copies the files.
 """
 
 import os
 import re
+import shutil
 from pathlib import Path, PurePosixPath
 
 build_dir = Path.cwd()
@@ -43,6 +48,9 @@ _STYLE = re.compile(r"""\sstyle=(?:(["']).*?\1|[^\s>]+)""", re.IGNORECASE)
 _TABLE_END = re.compile(r"</table\s*>", re.IGNORECASE)
 # The classes Quarto 1 gives a computational table
 _FRAME_CLASSES = ("table", "table-sm", "table-striped", "small")
+_CSS_URL = re.compile(r"""url\(\s*(["']?)(?P<ref>[^"')]*)\1\s*\)""", re.IGNORECASE)
+# A reference with a scheme (`data:`, `https:`), or one from the site root
+_NOT_A_FILE = re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*:|/")
 
 
 def _output_dir():
@@ -220,10 +228,50 @@ def style_data_frames(html):
     return "".join(pieces)
 
 
+def stylesheet_files(css):
+    """Return the files a stylesheet refers to with `url()`, relative to the stylesheet"""
+    files = []
+    for match in _CSS_URL.finditer(css):
+        ref = re.split(r"[?#]", match.group("ref").strip(), maxsplit=1)[0]
+        if ref and not _NOT_A_FILE.match(ref) and ref not in files:
+            files.append(ref)
+    return files
+
+
+def copy_stylesheet_files(output_dir):
+    """
+    Copy the files that extensions' dependency stylesheets refer to into `site_libs`
+
+    A stylesheet in `site_libs` is matched to an extension's stylesheet by its content, since
+    Quarto 2 files it under the dependency's name rather than the extension's.
+    """
+    extensions = build_dir / "_extensions"
+    site_libs = output_dir / "site_libs"
+    if not extensions.is_dir() or not site_libs.is_dir():
+        return
+    sources = {path.read_bytes(): path for path in sorted(extensions.rglob("*.css"))}
+    for stylesheet in site_libs.rglob("*.css"):
+        source = sources.get(stylesheet.read_bytes())
+        if source is None:
+            continue
+        for ref in stylesheet_files(source.read_text(encoding="utf-8")):
+            origin = (source.parent / ref).resolve()
+            target = (stylesheet.parent / ref).resolve()
+            if (
+                origin.is_file()
+                and not target.exists()
+                and origin.is_relative_to(extensions.resolve())
+                and target.is_relative_to(site_libs.resolve())
+            ):
+                target.parent.mkdir(parents=True, exist_ok=True)
+                _ = shutil.copyfile(origin, target)
+
+
 def main():
     output_dir = _output_dir()
     if not output_dir.is_dir():
         return
+    copy_stylesheet_files(output_dir)
     for page in _rendered_pages(output_dir):
         html = page.read_text(encoding="utf-8")
         finished = style_data_frames(wrap_navbar_text(place_homepage_sidebar(html)))
