@@ -406,6 +406,44 @@ class TestPostRender:
         )
         assert (site / "other.html").read_text(encoding="utf-8") == '<a href="/x">'
 
+    def test_finds_the_files_a_stylesheet_refers_to(self):
+        css = (
+            '@font-face { src: url(Font.woff2) format("woff2"), url("fonts/b.woff?v=1#x"); }\n'
+            ".a { background: url('img.png'); }\n"
+            ".b { background: url(data:image/png;base64,AAAA); }\n"
+            ".c { background: url(https://example.com/x.png), url(/root.png), url(#id); }\n"
+            ".d { background: url(img.png); }"
+        )
+        assert _post_render().stylesheet_files(css) == ["Font.woff2", "fonts/b.woff", "img.png"]
+
+    def test_copies_the_files_a_dependency_stylesheet_refers_to(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        css = "@font-face { src: url(Font.woff2); } .x { background: url(../outside.png); }"
+        extension = tmp_path / "_extensions" / "player"
+        extension.mkdir(parents=True)
+        (extension / "player.css").write_text(css, encoding="utf-8")
+        (extension / "Font.woff2").write_bytes(b"font")
+        (tmp_path / "_extensions" / "outside.png").write_bytes(b"png")
+        site = tmp_path / "_site"
+        dependency = site / "site_libs" / "libs" / "player-dep" / "1.0.0"
+        other = site / "site_libs" / "libs" / "other" / "1.0.0"
+        for folder in (dependency, other):
+            folder.mkdir(parents=True)
+        (dependency / "player.css").write_text(css, encoding="utf-8")
+        (other / "other.css").write_text("@font-face { src: url(Font.woff2); }", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("QUARTO_PROJECT_OUTPUT_DIR", "_site")
+        monkeypatch.setenv("QUARTO_PROJECT_RENDER_ALL", "1")
+
+        module = _post_render()
+        module.build_dir = tmp_path
+        module.main()
+
+        assert (dependency / "Font.woff2").read_bytes() == b"font"
+        assert (dependency.parent / "outside.png").read_bytes() == b"png"
+        assert not (other / "Font.woff2").exists()
+
 
 class TestMetadataPartial:
     def test_constant_lines(self):
