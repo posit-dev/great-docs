@@ -495,7 +495,7 @@ actual backend connection count.
 A mutable module-level variable is documented the same way as a constant, but its docstring should
 emphasize valid values, defaults, and what happens when a user changes it:
 
-```python
+````python
 timeout: int = 30
 """Seconds to wait before abandoning a request.
 
@@ -506,13 +506,14 @@ may want 120 or more.
 
 Examples
 --------
-```{python}
+```{{python}}
 #| eval: false
 import mypackage
 
 mypackage.timeout = 60  # generous timeout for batch jobs
-"""
 ```
+"""
+````
 
 ### Type Aliases
 
