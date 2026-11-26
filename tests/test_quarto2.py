@@ -53,6 +53,7 @@ class TestAdaptConfig:
         assert adapted["format"]["html"] == {
             "theme": ["flatly", "quarto2.scss"],
             "syntax-highlighting": "arrow",
+            "fig-format": "retina",
         }
         assert adapted["project"]["post-render"] == [
             "scripts/share-sidebars.py",
@@ -116,7 +117,13 @@ class TestAdaptConfig:
     @pytest.mark.parametrize("key", ["syntax-highlighting", "highlight-style"])
     def test_keeps_a_highlight_style_the_site_names(self, key: str):
         adapted = quarto2.adapt_config({"format": {"html": {key: "github"}}})
-        assert adapted["format"]["html"] == {key: "github"}
+        assert adapted["format"]["html"] == {key: "github", "fig-format": "retina"}
+
+    def test_keeps_a_figure_format_the_site_names(self):
+        html = quarto2.adapt_config({"format": {"html": {"fig-format": "svg"}}})
+        assert html["format"]["html"]["fig-format"] == "svg"
+        execute = quarto2.adapt_config({"execute": {"fig-format": "svg"}, "format": {"html": {}}})
+        assert "fig-format" not in execute["format"]["html"]
 
     def test_post_render_script_runs_last(self):
         quarto_config = {"project": {"post-render": ["scripts/quarto2-post-render.py", "b.py"]}}
