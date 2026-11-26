@@ -9,6 +9,13 @@
   padding-top: 14px;
 }
 
+// Quarto 2 puts the prev/next links at the end of `main`, so they come straight after the
+// last paragraph (Quarto 1 puts them after `main`, below the page metadata). Give them the
+// same space above that the page metadata gets.
+#quarto-document-content > .page-navigation {
+  margin-top: 2rem;
+}
+
 @media (max-width: 991.98px) {
   #quarto-content > * {
     padding-top: 0;
