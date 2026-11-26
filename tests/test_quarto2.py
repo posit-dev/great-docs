@@ -339,6 +339,39 @@ class TestPostRender:
         html = '<nav id="TOC"><a href="#s" class="nav-link">Section</a></nav>'
         assert _post_render().wrap_navbar_text(html) == html
 
+    def test_styles_a_pandas_table_as_quarto_1_does(self):
+        html = (
+            "<div>\n<style scoped>\n    .dataframe thead th { text-align: right; }\n</style>\n"
+            '<table border="1" class="dataframe">\n'
+            '<thead><tr style="text-align: right;"><th></th><th>x</th></tr></thead>\n'
+            "<tbody><tr><th>0</th><td>1</td></tr></tbody>\n</table>\n</div>\n"
+            '<table class="other"><tr style="color: red"><td>1</td></tr></table>'
+        )
+        assert _post_render().style_data_frames(html) == (
+            "<div>\n\n"
+            '<table class="dataframe table table-sm table-striped small">\n'
+            "<thead><tr><th></th><th>x</th></tr></thead>\n"
+            "<tbody><tr><th>0</th><td>1</td></tr></tbody>\n</table>\n</div>\n"
+            '<table class="other"><tr style="color: red"><td>1</td></tr></table>'
+        )
+
+    def test_keeps_a_style_that_is_not_the_tables_sibling(self):
+        html = '<style>p {}</style><p>Text</p><table border="1" class="dataframe"></table>'
+        assert _post_render().style_data_frames(html) == (
+            "<style>p {}</style><p>Text</p>"
+            '<table class="dataframe table table-sm table-striped small"></table>'
+        )
+
+    def test_styles_an_r_table_and_leaves_scripts_alone(self):
+        html = (
+            '<script>s = `<table border="1" class="dataframe">`</script>'
+            '<table class="data-frame" border="1"></table>'
+        )
+        assert _post_render().style_data_frames(html) == (
+            '<script>s = `<table border="1" class="dataframe">`</script>'
+            '<table class="data-frame table table-sm table-striped small" border="1"></table>'
+        )
+
     def test_root_page_gets_a_dot_prefix(self):
         assert _post_render().rewrite("<a href='/x.html'>x</a>", "") == ("<a href='./x.html'>x</a>")
 
