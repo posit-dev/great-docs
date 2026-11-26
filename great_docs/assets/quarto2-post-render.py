@@ -11,6 +11,10 @@ metadata sidebar sits in the body column. This script puts it in the right margi
 
 Quarto 2 writes navbar link text directly in the link, without the `.menu-text` span that
 Great Docs' scripts look for, so this script adds the span.
+
+Quarto 1 gives the HTML tables of pandas and R data frames Bootstrap's table classes, and
+removes the border and styles pandas writes. Quarto 2 leaves them as written, so this script
+does the same.
 """
 
 import os
@@ -34,6 +38,11 @@ _NAV_LINK = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 _ICON = re.compile(r"\s*<i\b[^>]*>\s*</i>\s*", re.IGNORECASE)
+_BORDER = re.compile(r"""\sborder=(?:(["']).*?\1|[^\s>]+)""", re.IGNORECASE)
+_STYLE = re.compile(r"""\sstyle=(?:(["']).*?\1|[^\s>]+)""", re.IGNORECASE)
+_TABLE_END = re.compile(r"</table\s*>", re.IGNORECASE)
+# The classes Quarto 1 gives a computational table
+_FRAME_CLASSES = ("table", "table-sm", "table-striped", "small")
 
 
 def _output_dir():
@@ -165,13 +174,59 @@ def wrap_navbar_text(html):
     return html[: opening.end()] + navbar + html[end:]
 
 
+def style_data_frames(html):
+    """
+    Style the tables of pandas and R data frames as Quarto 1 does
+
+    A pandas table (`table.dataframe`) loses its `border` attribute, the `style` of each row
+    and the `<style>` element just before it, and gets Bootstrap's table classes. An R table
+    (`table.data-frame`) gets the classes.
+    """
+    pieces = []
+    pos = 0
+    style = None
+    in_frame = False
+    for match in _TOKEN.finditer(html):
+        between = html[pos : match.start()]
+        pos = match.end()
+        if in_frame and _TABLE_END.search(between):
+            in_frame = False
+        if between.strip():
+            style = None
+        pieces.append(between)
+        markup = match.group("tag")
+        if markup is None:
+            # Comments aren't elements, so a `<style>` before one is still the table's sibling
+            if match.group(0).startswith("<!--"):
+                pieces.append(match.group(0))
+                continue
+            style = len(pieces) if match.group(0)[:6].lower() == "<style" else None
+            pieces.append(match.group(0))
+            continue
+        name = _TAG_NAME.match(markup).group(1).lower()
+        classes = _classes(markup)
+        if name == "table" and "dataframe" in classes:
+            markup = _change_classes(_BORDER.sub("", markup), add=_FRAME_CLASSES)
+            if style is not None:
+                pieces[style] = ""
+            in_frame = True
+        elif name == "table" and "data-frame" in classes:
+            markup = _change_classes(markup, add=_FRAME_CLASSES)
+        elif name == "tr" and in_frame:
+            markup = _STYLE.sub("", markup)
+        style = None
+        pieces.append(markup)
+    pieces.append(html[pos:])
+    return "".join(pieces)
+
+
 def main():
     output_dir = _output_dir()
     if not output_dir.is_dir():
         return
     for page in _rendered_pages(output_dir):
         html = page.read_text(encoding="utf-8")
-        finished = wrap_navbar_text(place_homepage_sidebar(html))
+        finished = style_data_frames(wrap_navbar_text(place_homepage_sidebar(html)))
         finished = rewrite(finished, _offset(page, output_dir))
         if finished != html:
             page.write_text(finished, encoding="utf-8")
