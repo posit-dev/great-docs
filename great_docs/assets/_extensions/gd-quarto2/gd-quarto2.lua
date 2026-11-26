@@ -5,6 +5,12 @@
 --- and the `metadata.html` partial, and 0.47.0 and earlier releases write no Open Graph or
 --- Twitter card tags, so the filter shifts the headings and adds the partial's page tags and
 --- the card tags. Later releases write the card tags but `og:type`, which the filter adds.
+---
+--- Quarto 2 also dropped Quarto 1's doubled-brace escape, which shows a cell such as
+--- ```` ```{{python}} ```` with single braces, so the filter removes the extra braces as
+--- Quarto 1's `engine-escape.lua` does. And Quarto 2 shows the `fig-cap` of a cell with no
+--- label as a paragraph after the cell, so the filter makes the cell's plot a figure with
+--- that caption, as Quarto 1 does.
 
 local pandoc = _G.pandoc --- @diagnostic disable-line:undefined-field
 local quarto = _G.quarto --- @diagnostic disable-line:undefined-field
@@ -63,6 +69,104 @@ local function raw_markup(value)
     return nil
   end
   return markup
+end
+
+-- A code cell's language in doubled braces, e.g. `{{python}}`, with Quarto 1's capture of
+-- the language in single braces
+local ENGINE_ESCAPE = "{({+([^<}]+)}+)}"
+
+--- Remove the extra braces from an escaped cell, as Quarto 1 does
+---
+--- A code block whose language is escaped shows the cell, fences and all. In the text of
+--- other code blocks, the escape is removed from fence openers and from inline cells after
+--- a backtick. Quarto 1 marks a block with no language that shows an opener as Markdown.
+--- @param block table
+--- @return table|nil
+function CodeBlock(block)
+  local classes = block.classes
+  if #classes == 1 or (#classes == 2 and classes[2] == "code-annotation-code") then
+    local engine = classes[1]:match(ENGINE_ESCAPE)
+    if engine then
+      block.text = "```" .. engine .. "\n" .. block.text .. "\n```"
+      classes[1] = "markdown"
+      return block
+    end
+  end
+  if not block.text:find("{{", 1, true) then
+    return nil
+  end
+  local text, openers = block.text:gsub("```" .. ENGINE_ESCAPE, "```%1")
+  if openers > 0 and #classes == 0 then
+    classes:insert(1, "markdown")
+  end
+  local lines = {}
+  for line in (text .. "\n"):gmatch("(.-)\n") do
+    lines[#lines + 1] = line:gsub("([^`]+`+)" .. ENGINE_ESCAPE, "%1%2")
+  end
+  block.text = table.concat(lines, "\n")
+  return block
+end
+
+--- Remove the extra braces from an escaped inline cell, e.g. `` `{{python}} 1 + 1` ``
+--- @param code table
+--- @return table|nil
+function Code(code)
+  if not code.text:find("{{", 1, true) or code.text:match("^{{<") then
+    return nil
+  end
+  code.text = code.text:gsub("^" .. ENGINE_ESCAPE, "%1"):gsub("^(`+)" .. ENGINE_ESCAPE, "%1%2")
+  return code
+end
+
+--- The image that is a block's only content, if it has no other
+--- @param block table
+--- @return table|nil
+local function only_image(block)
+  local para = block.content[1]
+  if #block.content == 1 and (para.t == "Para" or para.t == "Plain") then
+    if #para.content == 1 and para.content[1].t == "Image" then
+      return para.content[1]
+    end
+  end
+  return nil
+end
+
+--- Make the plot of a cell with an unlabelled `fig-cap` a figure with that caption
+---
+--- Quarto 2 puts the cell in a div with no attributes and the caption in a paragraph after
+--- it. The cell's one output that is an image becomes a figure, as in Quarto 1. A cell with
+--- several images is left as it is.
+--- @param div table
+--- @return table|nil
+function Div(div)
+  if div.identifier ~= "" or #div.classes > 0 or #div.content ~= 2 then
+    return nil
+  end
+  for _ in pairs(div.attributes) do
+    return nil
+  end
+  local cell, caption = div.content[1], div.content[2]
+  if cell.t ~= "Div" or not cell.classes:includes("cell") or caption.t ~= "Para" then
+    return nil
+  end
+  local output = nil
+  for _, block in ipairs(cell.content) do
+    if block.t == "Div" and block.classes:includes("cell-output-display") and only_image(block) then
+      if output then
+        return nil
+      end
+      output = block
+    end
+  end
+  if output == nil then
+    return nil
+  end
+  local image = only_image(output)
+  image.classes:insert("figure-img")
+  output.content = {
+    pandoc.Figure({ pandoc.Plain({ image }) }, { long = { pandoc.Plain(caption.content) } }),
+  }
+  return cell
 end
 
 --- Shift every heading as Pandoc's `--shift-heading-level-by` does
