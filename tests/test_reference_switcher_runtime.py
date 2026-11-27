@@ -48,9 +48,15 @@ def _icons(html: str) -> list[str]:
     ]
 
 
+def _labels(html: str) -> list[str]:
+    """The text after each icon."""
+    return re.findall(r"</i><span[^>]*>([^<]*)</span>", html)
+
+
 def test_segmented_buttons_show_the_python_logo_and_a_plug():
     html = _switcher("api,mcp")
     assert _icons(html) == ["bi gd-ref-svg-icon+svg", "bi bi-plug"]
+    assert _labels(html) == ["Python", "MCP"]
     assert html.count(_PYTHON_EYE) == 1
 
 
@@ -62,6 +68,7 @@ def test_dropdown_shows_the_current_section_and_each_section_with_their_icons():
         "bi bi-terminal",
         "bi bi-plug",
     ]
+    assert _labels(html) == ["CLI", "Python", "CLI", "MCP"]
 
 
 def test_dropdown_toggle_shows_the_python_logo_on_the_api_reference():
