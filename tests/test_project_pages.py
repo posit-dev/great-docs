@@ -18,7 +18,9 @@ def layout(tmp_path: Path) -> Layout:
     return layout
 
 
-def _dep(name: str, specifier: str = "", marker: str = "") -> dict[str, Any]:
+def _dep(
+    name: str, specifier: str = "", marker: str = "", extras: list[str] | None = None
+) -> dict[str, Any]:
     """
     Create a dependency entry in the project metadata format
 
@@ -30,15 +32,19 @@ def _dep(name: str, specifier: str = "", marker: str = "") -> dict[str, Any]:
         The version constraint.
     marker
         The environment marker.
+    extras
+        The requested extras.
 
     Returns
     -------
     :
-        The dependency, with a `marker` key only when `marker` is not empty.
+        The dependency, with `marker` and `extras` keys only when they are not empty.
     """
     dep: dict[str, Any] = {"name": name, "specifier": specifier}
     if marker:
         dep["marker"] = marker
+    if extras:
+        dep["extras"] = extras
     return dep
 
 
@@ -46,6 +52,7 @@ def _metadata(
     runtime: list[dict[str, Any]] | None = None,
     optional: dict[str, list[dict[str, Any]]] | None = None,
     requires_python: str = "",
+    name: str | None = None,
 ) -> dict[str, Any]:
     """
     Create dependency metadata for the package-info page
@@ -58,14 +65,17 @@ def _metadata(
         The optional dependency groups, by name.
     requires_python
         The Python requirement.
+    name
+        The distribution name.
 
     Returns
     -------
     :
-        The runtime dependencies, optional groups and Python requirement under their
+        The name, runtime dependencies, optional groups and Python requirement under their
         project metadata keys.
     """
     return {
+        "name": name,
         "dependencies": runtime or [],
         "optional_dependencies": optional or {},
         "requires_python": requires_python,
@@ -136,9 +146,43 @@ def test_package_info_lists_optional_groups(layout: Layout):
     content = path.read_text(encoding="utf-8")
     assert "## Optional Dependencies" in content
     assert "### `dev`" in content
-    assert "### `empty`\n\n*No dependencies declared.*" in content
+    assert "### `empty` {#empty}\n\n*No dependencies declared.*" in content
     assert "- **Optional Dependencies:** 2 groups (2 unique packages)" in content
     assert "- **Total unique dependencies:** 2" in content
+
+
+def test_package_info_links_groups_that_a_group_includes(layout: Layout):
+    """Check that the project's own extras link to their groups instead of listing the project"""
+    metadata = _metadata(
+        [_dep("babel")],
+        {
+            "all": [_dep("great_tables", extras=["extra"]), _dep("great-tables", extras=["Dev"])],
+            "dev": [
+                _dep("great_tables", extras=["extra"]),
+                _dep("ibis-framework", extras=["duckdb"]),
+            ],
+            "extra": [_dep("pillow")],
+            "old": [_dep("great_tables", extras=["gone"], marker="python_version<'3.12'")],
+        },
+        name="great-tables",
+    )
+
+    path = package_info.write_page(_config(), layout, metadata, StubRemote(), report=print)
+
+    assert path is not None
+    content = path.read_text(encoding="utf-8")
+    assert "great_tables</code>" not in content
+    assert (
+        "### `all` {#all}\n\nIncludes the [`extra`](#extra) and [`dev`](#dev) groups.\n\n"
+        "### `dev`" in content
+    )
+    dev = content.split("### `dev` {#dev}")[1].split("### `extra`")[0]
+    assert dev.startswith("\n\nIncludes the [`extra`](#extra) group.\n")
+    assert 'class="gd-no-link">ibis-framework[duckdb]</code>' in dev
+    assert 'href="https://pypi.org/project/ibis-framework/"' in dev
+    assert "Includes the `gone` (when `python_version<'3.12'`) group." in content
+    assert "- **Optional Dependencies:** 4 groups (2 unique packages)" in content
+    assert "- **Total unique dependencies:** 3" in content
 
 
 def test_package_info_shows_markers_only_in_tables_that_have_them(layout: Layout):
