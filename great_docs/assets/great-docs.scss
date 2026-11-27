@@ -490,6 +490,12 @@ section:has(> h2.doc-notes, > h3.doc-notes) {
    font-weight: normal;
 }
 
+// Hang the chip's padding to the left so that its text lines up with the
+// section heading, as a term that isn't code (a See Also link) already does.
+#{$docstring-sections} dt > code {
+   margin-left: -0.25rem;
+}
+
 .doc-text dt code {
    @extend .p-1;
    font-weight: normal;
@@ -1327,7 +1333,6 @@ html.gd-wide-capable[data-gd-width="wide"] #quarto-document-content {
 dt {
     min-height: 32px;
     overflow-x: visible;
-    margin-left: -4px;
 }
 
 dd {

@@ -96,3 +96,12 @@ class TestCSSAnnotationHeight:
                 selector = stripped
             elif stripped == "height: 32px;" and re.search(r"(?<![\w-])dt\b", selector):
                 pytest.fail(f"Found fixed 'height: 32px' in {selector!r} — should be 'min-height'")
+
+    def test_only_a_code_chip_is_pulled_left(self, css_source):
+        # A negative margin on every `dt` moved See Also links and plain terms left of
+        # their heading. Only the padded code chip of a docstring term should move.
+        rule = re.search(r"(?m)^dt \{(.*?)\}", css_source, re.DOTALL)
+
+        assert rule is not None
+        assert "margin-left" not in rule.group(1)
+        assert re.search(r"\} dt > code \{\s*margin-left: -0\.25rem;", css_source)
