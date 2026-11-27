@@ -7,6 +7,7 @@ from __future__ import annotations
 import html
 from typing import TYPE_CHECKING
 
+from packaging.utils import canonicalize_name
 from yaml12 import format_yaml
 
 from ..._apiref._rendering._tables import html_table
@@ -49,7 +50,9 @@ def write_page(
 
     The page has a table of runtime dependencies, a table for each non-empty optional
     dependency group and a summary of dependency counts and the Python requirement.
-    Empty optional groups show a message instead of a table. Each row shows the version
+    Empty optional groups show a message instead of a table. A group that requires the
+    project itself with extras, such as `all = ["pkg[dev,docs]"]`, links to those groups
+    rather than listing the project as a dependency. Each row shows the version
     constraint and a PyPI link. A table includes an environment-marker column if any of
     its dependencies have a marker, and a latest PyPI release-date column if
     `package_info_page.release_dates` is enabled.
@@ -63,8 +66,8 @@ def write_page(
     layout
         Project directories, including the build directory for `package-info.qmd`.
     metadata
-        The project metadata, read for `dependencies`, `optional_dependencies` and
-        `requires_python`. No page is written when all three are empty.
+        The project metadata, read for `name`, `dependencies`, `optional_dependencies` and
+        `requires_python`. No page is written when the last three are empty.
     remote
         The source of PyPI release dates. Queries run only when the page is written and
         release dates are enabled. An unknown date appears as a dash.
@@ -97,11 +100,66 @@ def write_page(
 
     link_svg = get_icon_svg("external-link", size=14, css_class="")
 
+    # A group requiring the project itself with extras includes those groups, and its
+    # table lists only the other packages.
+    project = metadata.get("name")
+    project_name = canonicalize_name(project) if project else None
+    groups = {canonicalize_name(name): name for name in optional_deps}
+
+    def is_own(dep: Dependency) -> bool:
+        """
+        Check whether a requirement names the project itself with extras
+
+        Parameters
+        ----------
+        dep
+            A requirement in an optional group.
+
+        Returns
+        -------
+        :
+            Whether the requirement includes other groups of the project.
+        """
+        return bool(dep.get("extras")) and canonicalize_name(dep["name"]) == project_name
+
+    included = {
+        name: own for name, deps in optional_deps.items() if (own := list(filter(is_own, deps)))
+    }
+    optional_deps = {
+        name: [dep for dep in deps if not is_own(dep)] for name, deps in optional_deps.items()
+    }
+
     all_dep_names = {d["name"] for d in runtime_deps}
     for deps in optional_deps.values():
         all_dep_names |= {d["name"] for d in deps}
     show_dates = config.package_info_page_release_dates
     pypi_dates = remote.pypi_release_dates(all_dep_names) if show_dates else {}
+
+    def includes_line(deps: list[Dependency]) -> str:
+        """
+        Format the sentence naming the groups that a group includes
+
+        Parameters
+        ----------
+        deps
+            The group's requirements on the project itself, each with extras.
+
+        Returns
+        -------
+        :
+            A Markdown sentence linking each included group to its heading, with any
+            environment marker after the group it applies to.
+        """
+        parts: list[str] = []
+        for dep in deps:
+            for extra in dep.get("extras", []):
+                target = groups.get(canonicalize_name(extra))
+                part = f"[`{target}`](#{target})" if target else f"`{extra}`"
+                marker = dep.get("marker")
+                parts.append(f"{part} (when `{marker}`)" if marker else part)
+        names = parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} and {parts[-1]}"
+        noun = "group" if len(parts) == 1 else "groups"
+        return f"Includes the {names} {noun}.\n"
 
     def dependency_table(deps: list[Dependency]) -> str:
         """
@@ -128,7 +186,9 @@ def write_page(
                 f'<a href="https://pypi.org/project/{html.escape(name)}/"'
                 f' class="gd-pypi-link">{link_svg}</a>'
             )
-            pkg_cell = f'<code class="gd-no-link">{html.escape(name)}</code>'
+            extras = dep.get("extras")
+            extras_text = f"[{','.join(extras)}]" if extras else ""
+            pkg_cell = f'<code class="gd-no-link">{html.escape(name + extras_text)}</code>'
             row = [pkg_cell, spec]
             if has_markers:
                 marker = dep.get("marker")
@@ -161,11 +221,13 @@ def write_page(
     if optional_deps:
         sections.append(f"## {optional_label}\n")
         for group_name, group_deps in sorted(optional_deps.items()):
-            sections.append(f"### `{group_name}`\n")
+            sections.append(f"### `{group_name}` {{#{group_name}}}\n")
+            if group_name in included:
+                sections.append(includes_line(included[group_name]))
             if group_deps:
                 sections.append(dependency_table(group_deps))
                 sections.append("")
-            else:
+            elif group_name not in included:
                 sections.append("*No dependencies declared.*\n")
 
     sections.append(f"## {summary_label}\n")
