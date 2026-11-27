@@ -3402,6 +3402,12 @@ html.quarto-dark .gd-badge-deprecated,
     font-size: 0.9rem;
 }
 
+/* Sit an inline icon on the baseline as a Bootstrap Icons glyph does */
+.reference-switcher-container .gd-ref-svg-icon svg {
+    display: inline-block;
+    vertical-align: -0.125em;
+}
+
 /* Dark mode support for switcher */
 body.quarto-dark .reference-switcher {
     background: #2a2a2a;
