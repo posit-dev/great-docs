@@ -35,9 +35,9 @@
     // Section metadata: id → { label, icon (Bootstrap Icons class), svg (an
     // inline icon used instead of the class), pathSegment }
     var SECTIONS = {
-        api: { label: 'Python API', svg: PYTHON_ICON, path: '' },
+        api: { label: 'Python', svg: PYTHON_ICON, path: '' },
         cli: { label: 'CLI', icon: 'bi-terminal', path: 'cli/' },
-        mcp: { label: 'MCP Server', icon: 'bi-plug', path: 'mcp/' }
+        mcp: { label: 'MCP', icon: 'bi-plug', path: 'mcp/' }
     };
 
     // The section's icon; an inline icon sits in the same `i.bi` element, so the
