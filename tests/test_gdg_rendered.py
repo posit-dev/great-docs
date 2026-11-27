@@ -5767,6 +5767,17 @@ def test_R5_no_dismiss_no_navbar_js():
     assert not (_site_dir(pkg) / "navbar-style.js").exists()
 
 
+@pytest.mark.dedicated
+def test_R5_no_dismiss_has_sticky_sidebars():
+    """gdtest_gradient_no_dismiss: sticky-sidebars.js loads without a navbar style."""
+    pkg = "gdtest_gradient_no_dismiss"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    assert (_site_dir(pkg) / "sticky-sidebars.js").exists()
+    content = (_site_dir(pkg) / "index.html").read_text(encoding="utf-8")
+    assert "sticky-sidebars.js" in content
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # R4: include_in_header
 # ═══════════════════════════════════════════════════════════════════════════════
