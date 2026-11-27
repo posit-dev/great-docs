@@ -370,6 +370,7 @@ SCRIPTS: tuple[Script, ...] = (
     Script("copy-page.js", _AFTER_BODY, lambda c: c.markdown_pages_widget),
     Script("sidebar-wrap.js", _AFTER_BODY),
     Script("sidebar-float.js", _AFTER_BODY),
+    Script("sticky-sidebars.js", _AFTER_BODY),
     Script(
         "sidebar-filter.js",
         _AFTER_BODY,

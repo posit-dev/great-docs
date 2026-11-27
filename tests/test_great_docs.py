@@ -17681,6 +17681,26 @@ class TestUpdateQuartoConfigScripts:
             assert any("sidebar-filter" in s for s in scripts)
             assert any("dark-mode-toggle" in s for s in scripts)
 
+    def test_injects_sticky_sidebars_without_a_navbar_style(self):
+        """Keeps the sidebars below the navbar on sites without a gradient navbar."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            docs = self._make_project(tmp_dir)
+            quarto_yml = docs.layout.build_dir / "_quarto.yml"
+            config = {
+                "project": {"type": "website"},
+                "website": {"navbar": {"left": []}, "sidebar": []},
+                "format": {"html": {"include-after-body": [], "include-in-header": []}},
+            }
+            with open(quarto_yml, "w") as f:
+                write_yaml(config, f)
+            update_quarto_config(docs, make_run(docs))
+            with open(quarto_yml) as f:
+                result = read_yaml(f)
+            scripts = [str(item) for item in result["format"]["html"]["include-after-body"]]
+            assert sum("/sticky-sidebars.js" in s for s in scripts) == 1
+            assert not any("navbar-style" in s for s in scripts)
+            assert "sticky-sidebars.js" in result["project"]["resources"]
+
     def test_injects_theme_init_in_header(self):
         """Injects theme-init.js into include-in-header for dark mode."""
         with tempfile.TemporaryDirectory() as tmp_dir:
