@@ -9,11 +9,14 @@ from pathlib import Path
 import pytest
 
 import great_docs
+from great_docs._build.quarto import executable as quarto_executable
 from great_docs._website import head, page_dates
 
 BUNDLED = Path(great_docs.__file__).parent / "assets" / "metadata.html"
 
-pytestmark = pytest.mark.skipif(shutil.which("quarto") is None, reason="Quarto is not installed")
+pytestmark = pytest.mark.skipif(
+    shutil.which(quarto_executable()) is None, reason="Quarto is not installed"
+)
 
 
 def test_partial_and_direction_reach_the_page(tmp_path: Path):
@@ -36,7 +39,7 @@ def test_partial_and_direction_reach_the_page(tmp_path: Path):
     )
     (project / "index.qmd").write_text("---\ntitle: T\n---\n\nText\n", encoding="utf-8")
 
-    subprocess.run(["quarto", "render"], cwd=project, check=True, capture_output=True)
+    subprocess.run([quarto_executable(), "render"], cwd=project, check=True, capture_output=True)
 
     page = (project / "_site" / "index.html").read_text(encoding="utf-8")
     assert page.count('<meta name="gd-i18n" content="a$b">') == 1
@@ -73,7 +76,7 @@ def test_page_dates_reach_the_page(tmp_path: Path) -> None:
     )
     (project / "reference" / "f.qmd").write_text("---\ntitle: F\n---\n\nText\n", encoding="utf-8")
 
-    subprocess.run(["quarto", "render"], cwd=project, check=True, capture_output=True)
+    subprocess.run([quarto_executable(), "render"], cwd=project, check=True, capture_output=True)
 
     page = (project / "_site" / "index.html").read_text(encoding="utf-8")
     generated = (project / "_site" / "reference" / "f.html").read_text(encoding="utf-8")
@@ -102,7 +105,7 @@ def test_robots_front_matter_reaches_the_page(tmp_path: Path):
         '---\ntitle: D\nrobots: "noindex, nofollow"\n---\n\nText\n', encoding="utf-8"
     )
 
-    subprocess.run(["quarto", "render"], cwd=project, check=True, capture_output=True)
+    subprocess.run([quarto_executable(), "render"], cwd=project, check=True, capture_output=True)
 
     draft = (project / "_site" / "draft.html").read_text(encoding="utf-8")
     index = (project / "_site" / "index.html").read_text(encoding="utf-8")

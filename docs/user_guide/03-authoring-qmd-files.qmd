@@ -199,7 +199,7 @@ Markdown provides several ways to emphasize text. Here's the syntax alongside wh
 |--------|--------|---------|
 | `*italic*` or `_italic_` | *italic* | Introducing terms, emphasis |
 | `**bold**` or `__bold__` | **bold** | Strong emphasis, important terms |
-| `***bold italic***` | ***bold italic*** | Rare, combined emphasis |
+| `***bold italic***` | **_bold italic_** | Rare, combined emphasis |
 | `` `code` `` | `code` | Function names, variables, file paths |
 | `~~strikethrough~~` | ~~strikethrough~~ | Deprecated or removed content |
 
@@ -1027,7 +1027,7 @@ in multiple pages, extracting it into an include file means you only need to upd
 When the `include` shortcode references a code file (anything other than `.qmd` or `.md`), Great
 Docs automatically wraps the file contents in a syntax-highlighted code block:
 
-```markdown{shortcodes=false}
+```{.markdown shortcodes=false}
 {{{< include src/mypackage/examples/demo.py >}}}
 ```
 
@@ -1048,7 +1048,7 @@ Generally, include shortcodes should not be enclosed in code blocks, as the form
 If your library already has runnable examples, tests, or configuration files that you want to
 showcase in the documentation, point `include` at them directly:
 
-```markdown{shortcodes=false}
+```{.markdown shortcodes=false}
 {{{< include src/mypackage/examples/usage.py >}}}
 {{{< include tests/test_core.py lines="12-30" >}}}
 {{{< include pyproject.toml >}}}

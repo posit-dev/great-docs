@@ -23,6 +23,7 @@ Run with:
 
 from __future__ import annotations
 
+import os
 import posixpath
 import re
 import sys
@@ -36,7 +37,10 @@ from great_docs._project.layout import Layout
 # ── Setup ────────────────────────────────────────────────────────────────────
 
 _TEST_PACKAGES_DIR = Path(__file__).resolve().parent.parent / "test-packages"
-_RENDERED_DIR = _TEST_PACKAGES_DIR / "_rendered"
+# `GDG_RENDERED_DIR` selects another Gauntlet build, as `render_all.py` does
+_RENDERED_DIR = Path(
+    os.environ.get("GDG_RENDERED_DIR") or _TEST_PACKAGES_DIR / "_rendered"
+).resolve()
 
 if str(_TEST_PACKAGES_DIR) not in sys.path:
     sys.path.insert(0, str(_TEST_PACKAGES_DIR))
@@ -82,15 +86,17 @@ def _config_path(pkg_name: str) -> Path:
 def _deployed_css(pkg_name: str) -> str:
     """Return concatenated CSS from all deployed stylesheets.
 
-    Searches standalone great-docs.css (legacy) and all compiled theme CSS
-    in site_libs/bootstrap/.
+    Searches standalone great-docs.css (legacy) and all compiled theme CSS,
+    which Quarto 1 writes to site_libs/bootstrap/ and Quarto 2 to site_libs/quarto/.
     """
     site = _site_dir(pkg_name)
     parts: list[str] = []
     standalone = site / "great-docs.css"
     if standalone.exists():
         parts.append(standalone.read_text(encoding="utf-8"))
-    for css_file in sorted(site.glob("site_libs/bootstrap/*.css")):
+    for css_file in sorted(
+        [*site.glob("site_libs/bootstrap/*.css"), *site.glob("site_libs/quarto/*.css")]
+    ):
         parts.append(css_file.read_text(encoding="utf-8"))
     return "\n".join(parts)
 

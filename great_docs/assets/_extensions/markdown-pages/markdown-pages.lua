@@ -255,12 +255,14 @@ end
 
 flatten.Table = plain_cells
 
--- Markdown consumers recognise `python` as the signature's language.
+-- Markdown consumers recognise `python` as the signature's language. The
+-- highlight spans written for Quarto 2 (experimental) are only for HTML.
 flatten.CodeBlock = function(block)
     if block.classes:includes("pythonsignature") then
         block.classes = block.classes:map(function(c)
             return c == "pythonsignature" and "python" or c
         end)
+        block.attributes["data-hl-spans"] = nil
         return block
     end
 end
@@ -325,7 +327,11 @@ local function write_companion(doc)
         blocks:insert(title:walk(flatten))
     end
     blocks:extend(doc.blocks)
-    local md = pandoc.write(pandoc.Pandoc(blocks), "gfm-raw_html", { wrap_text = "none" })
+    -- Quarto 2 has no GitHub-Flavored Markdown writer; use its Markdown one
+    local companion_doc = pandoc.Pandoc(blocks)
+    local options = { wrap_text = "none" }
+    local ok, md = pcall(pandoc.write, companion_doc, "gfm-raw_html", options)
+    if not ok then md = pandoc.write(companion_doc, "markdown", options) end
     for from, to in pairs(ASCII) do md = md:gsub(from, to) end
 
     -- A full render cleans the output directory, and Quarto creates each
@@ -352,6 +358,9 @@ local write = {
         return snapshot
     end,
 }
+
+-- Quarto 2 (versions 0.x) has no custom node handlers and warns about them
+if quarto.version[1] == 0 then convert = {} end
 
 return {
     { Pandoc = function(doc) snapshot = doc:clone() end },

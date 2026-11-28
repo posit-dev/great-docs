@@ -112,7 +112,7 @@ def render_page(config: Config, build_dir: Path, page: Path) -> subprocess.Compl
         Quarto's exit status and captured output.
     """
     return subprocess.run(
-        ["quarto", "render", str(page.relative_to(build_dir))],
+        [quarto.executable(), "render", str(page.relative_to(build_dir))],
         cwd=build_dir,
         env=quarto.environment(config),
         capture_output=True,

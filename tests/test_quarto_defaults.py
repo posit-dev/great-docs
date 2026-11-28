@@ -135,7 +135,7 @@ class TestRegisterSite:
 class TestRegisterExtensions:
     def test_filters_run_in_order_and_inventory_is_published(self):
         quarto_config: dict[str, Any] = {"project": {"resources": "data.csv"}}
-        quarto_defaults.register_extensions(quarto_config)
+        quarto_defaults.register_extensions(quarto_config, has_api_reference=True)
         assert quarto_config["filters"] == [
             "output-title",
             "details",
@@ -143,6 +143,17 @@ class TestRegisterExtensions:
             "interlinks",
         ]
         assert quarto_config["project"]["resources"] == ["data.csv", "objects.inv"]
+
+    def test_site_without_api_reference_publishes_no_inventory(self):
+        quarto_config: dict[str, Any] = {"project": {"resources": ["data.csv"]}}
+        quarto_defaults.register_extensions(quarto_config, has_api_reference=False)
+        assert quarto_config["filters"] == [
+            "output-title",
+            "details",
+            "gd-lightbox",
+            "interlinks",
+        ]
+        assert quarto_config["project"]["resources"] == ["data.csv"]
 
 
 class TestSiteIncludes:

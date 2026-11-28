@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 
 from great_docs._build import parallel_render as pr
+from great_docs._build.quarto import executable as quarto_executable
 
 # ── Choosing the number of processes ─────────────────────────────────────────
 
@@ -539,7 +540,9 @@ def test_worker_copy_writes_its_configuration_from_the_mapping(tmp_path: Path):
 
 # ── Rendering with Quarto ────────────────────────────────────────────────────
 
-_needs_quarto = pytest.mark.skipif(shutil.which("quarto") is None, reason="Quarto not installed")
+_needs_quarto = pytest.mark.skipif(
+    shutil.which(quarto_executable()) is None, reason="Quarto not installed"
+)
 
 _QUARTO_YML = """\
 project:
@@ -604,7 +607,7 @@ def _urls(sitemap: Path) -> list[str]:
 def sites(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path, pr.RenderResult]:
     plain = _write_project(tmp_path_factory.mktemp("plain") / "proj")
     split = _write_project(tmp_path_factory.mktemp("split") / "proj")
-    subprocess.run(["quarto", "render"], cwd=plain, check=True, capture_output=True)
+    subprocess.run([quarto_executable(), "render"], cwd=plain, check=True, capture_output=True)
     pages: list[str] = []
     config = pr.parse_yaml(_QUARTO_YML)
     result = pr.render(split, config, dict(os.environ), 3, on_page=pages.append, min_pages=1)

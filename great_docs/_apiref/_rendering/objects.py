@@ -46,6 +46,8 @@ from .._docstring_sections import (
 from .._docstring_summary import summary_lines
 from .._format import (
     HAS_RUFF,
+    escape_emphasis,
+    fence_indented_code,
     format_name,
     format_see_also,
     format_value,
@@ -351,7 +353,8 @@ class ObjectRenderer(BaseRenderer):
             if ann is None:
                 return ""
             elif isinstance(ann, str):
-                return repr_obj(ann)
+                # The syntax and literals between names, such as the `*` of `*Ts`
+                return escape_emphasis(repr_obj(ann))
             elif isinstance(ann, gf.ExprName):
                 return markdown_escape(ann.name)
             else:
@@ -392,7 +395,8 @@ class ObjectRenderer(BaseRenderer):
         items: list[InlineContentItem] = []
 
         if name:
-            items.append(Span(name, Attr(classes=["doc-parameter-name"])))
+            # Escape `**kwargs` and `global_`: Quarto 2 reads them as unclosed emphasis
+            items.append(Span(escape_emphasis(name), Attr(classes=["doc-parameter-name"])))
 
         if annotation:
             if isinstance(annotation, gf.Expr):
@@ -697,9 +701,9 @@ class ObjectRenderer(BaseRenderer):
         Returns
         -------
         :
-            The text as written in the docstring.
+            The text as written in the docstring, with indented code fenced for Quarto 2.
         """
-        return el.value
+        return fence_indented_code(el.value)
 
     def render_examples_section(self, el: gf.DocstringSectionExamples) -> BlockContent:
         """
@@ -736,7 +740,7 @@ class ObjectRenderer(BaseRenderer):
         if isinstance(el, ExampleCode):
             return CodeBlock(el.value, Attr(classes=["python"]))
         if isinstance(el, ExampleText):
-            return el.value
+            return fence_indented_code(el.value)
         return ""
 
     def render_deprecated_section(self, el: gf.DocstringSectionDeprecated) -> BlockContent:
@@ -783,9 +787,9 @@ class ObjectRenderer(BaseRenderer):
         Returns
         -------
         :
-            The section's description.
+            The section's description, with indented code fenced for Quarto 2.
         """
-        return el.value.description
+        return fence_indented_code(el.value.description)
 
     def render_warnings_section(self, el: DocstringSectionWarnings) -> BlockContent:
         """
@@ -799,9 +803,9 @@ class ObjectRenderer(BaseRenderer):
         Returns
         -------
         :
-            The text as written in the docstring.
+            The text as written in the docstring, with indented code fenced for Quarto 2.
         """
-        return el.value
+        return fence_indented_code(el.value)
 
     def render_notes_section(self, el: DocstringSectionNotes) -> BlockContent:
         """
@@ -815,9 +819,9 @@ class ObjectRenderer(BaseRenderer):
         Returns
         -------
         :
-            The text as written in the docstring.
+            The text as written in the docstring, with indented code fenced for Quarto 2.
         """
-        return el.value
+        return fence_indented_code(el.value)
 
     def render_see_also_section(self, el: DocstringSectionSeeAlso) -> BlockContent:
         """
@@ -892,7 +896,7 @@ class ObjectRenderer(BaseRenderer):
             # references can be processed. Pandoc does not process any markup
             # within backquotes `...`, but it does if the markup is within
             # html code tags.
-            desc = el.description or ""
+            desc = fence_indented_code(el.description or "")
             return Code(str(term)).html, desc
 
         # For Returns/Yields/Receives, merge consecutive unnamed items that

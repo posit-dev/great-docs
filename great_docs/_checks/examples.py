@@ -480,7 +480,7 @@ def _render_page_with_quarto(
         try:
             proc = subprocess.run(
                 [
-                    "quarto",
+                    quarto.executable(),
                     "render",
                     str(tmp_qmd),
                     "--to",

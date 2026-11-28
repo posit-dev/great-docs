@@ -11,10 +11,13 @@ import pytest
 from yaml12 import format_yaml
 
 import great_docs
+from great_docs._build.quarto import executable as quarto_executable
 from great_docs._website import page_metadata, social_cards
 from great_docs.config import Config
 
-pytestmark = pytest.mark.skipif(shutil.which("quarto") is None, reason="Quarto is not installed")
+pytestmark = pytest.mark.skipif(
+    shutil.which(quarto_executable()) is None, reason="Quarto is not installed"
+)
 
 IMAGE = "https://docs.example.com/pkg/card.png"
 _TAG = re.compile(r'<meta (?:property|name)="((?:og|twitter):[\w:]+)" content="([^"]*)"')
@@ -46,7 +49,7 @@ def _render_site(
         page_metadata.write_to_pages(project, quarto, Config(tmp_path), "Site default")
 
     result = subprocess.run(
-        ["quarto", "render"], cwd=project, check=True, capture_output=True, text=True
+        [quarto_executable(), "render"], cwd=project, check=True, capture_output=True, text=True
     )
     return project / "_site", result.stdout + result.stderr
 
@@ -120,7 +123,7 @@ def test_pages_with_their_own_tags_keep_them_alone(tmp_path):
     (project / "plain.qmd").write_text("---\ntitle: Plain\n---\n\nText.\n", encoding="utf-8")
     page_metadata.write_to_pages(project, quarto, Config(tmp_path), None)
 
-    subprocess.run(["quarto", "render"], cwd=project, check=True, capture_output=True)
+    subprocess.run([quarto_executable(), "render"], cwd=project, check=True, capture_output=True)
 
     # Quarto rewrites the first `og:title` to its page title on every page,
     # with or without card tags, so only the absence of other tags is ours

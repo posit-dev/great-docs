@@ -61,6 +61,7 @@ color, and description:
 
 Here is how these five statuses look as page-level badges:
 
+```{=html}
 <style>
 .gd-demo-badge, .gd-demo-sidebar-item, .gd-demo-sidebar-pill, .gd-demo-page-mock {
   font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -114,6 +115,7 @@ body.quarto-dark .gd-demo-sidebar-list { border-color: #374151; }
 }
 body.quarto-dark .gd-demo-page-mock { border-color: #374151; }
 </style>
+```
 
 <div style="display:flex; flex-direction:column; align-items:flex-start; gap:0.35rem; margin:1rem 0;">
 <div class="gd-demo-badge" style="color:#10b981; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25);"><span class="gd-demo-lbl">✦ New</span> <span class="gd-demo-dsc">&mdash; Recently added</span></div>

@@ -13,7 +13,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from .._build import quarto
 from . import i18n, page_dates, social_cards
+from . import quarto_yml as quarto_files
 from .seo import title as seo_title
 
 if TYPE_CHECKING:
@@ -22,7 +24,7 @@ if TYPE_CHECKING:
     from .._project.layout import Layout
     from ..config import Config
 
-__all__ = ["FILENAME", "title_element", "write"]
+__all__ = ["FILENAME", "constant_lines", "title_element", "write"]
 
 FILENAME = "metadata.html"
 """
@@ -30,6 +32,9 @@ Name of the partial in the bundled assets and in the Quarto project
 """
 
 _BUNDLED = Path(__file__).parents[1] / "assets" / FILENAME
+
+_OWN_TAGS = ("<meta charset=", '<meta name="viewport"')
+"""Partial tags that Quarto 2 writes itself"""
 
 
 def title_element(template: object) -> str | None:
@@ -57,6 +62,37 @@ def title_element(template: object) -> str | None:
 
     titled = seo_title.apply(template, "$pagetitle$", "$title-prefix$")
     return f"<title>$if(title-prefix)${titled}$else$$pagetitle$$endif$</title>"
+
+
+def constant_lines(partial: str) -> list[str]:
+    """
+    Return the partial's lines that are the same on every page (Quarto 2, experimental)
+
+    Leave out lines inside a conditional or loop, lines that use a template variable, and the
+    tags that Quarto 2 writes itself.
+
+    Parameters
+    ----------
+    partial
+        The metadata partial.
+
+    Returns
+    -------
+    :
+        The lines, with `$$` replaced by `$`.
+    """
+    lines: list[str] = []
+    depth = 0
+    for line in partial.splitlines():
+        stripped = line.strip()
+        if re.fullmatch(r"\$(?:if|for)\(.*\)\$", stripped):
+            depth += 1
+        elif stripped in ("$endif$", "$endfor$"):
+            depth -= 1
+        elif depth == 0 and stripped and "$" not in stripped.replace("$$", ""):
+            if not stripped.startswith(_OWN_TAGS):
+                lines.append(stripped.replace("$$", "$"))
+    return lines
 
 
 def write(
@@ -123,6 +159,13 @@ def write(
         partial = partial.rstrip("\n") + "\n" + date_lines + "\n"
 
     _ = (layout.build_dir / FILENAME).write_text(partial, encoding="utf-8")
+
+    if quarto.is_q2():
+        # Quarto 2 ignores the partial; the gd-quarto2 filter writes its page tags
+        header = quarto_files.includes(quarto_config, "include-in-header")
+        for line in constant_lines(partial):
+            if {"text": line} not in header:
+                header.append({"text": line})
 
     partials = cast("str | list[str]", html_config.get("template-partials", []))
     if isinstance(partials, str):

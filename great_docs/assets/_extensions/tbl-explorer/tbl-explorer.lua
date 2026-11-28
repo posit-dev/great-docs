@@ -17,6 +17,17 @@ local function kwarg_str(kwargs, key)
     return s or ""
 end
 
+--- Return the directory holding this script, ending in a slash.
+---
+--- Quarto 2 omits Lua's `debug` library, so resolve a path against the
+--- extension's directory instead.
+local function find_script_dir()
+    if debug then
+        return debug.getinfo(1, "S").source:match("@?(.*/)") or "./"
+    end
+    return (quarto.utils.resolve_path("x"):gsub("x$", ""))
+end
+
 return {
     ["tbl-explorer"] = function(args, kwargs)
         -- File path can be a positional arg or named kwarg
@@ -33,7 +44,7 @@ return {
         end
 
         -- Locate the helper script (lives alongside this .lua file)
-        local script_dir = debug.getinfo(1, "S").source:match("@?(.*/)") or "./"
+        local script_dir = find_script_dir()
         local helper = script_dir .. "_tbl_explorer_shortcode.py"
 
         -- Resolve relative file paths against the Quarto project root

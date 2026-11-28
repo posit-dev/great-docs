@@ -523,7 +523,7 @@ def _generate_preview_html(editor_data: dict, script_data: dict) -> str:
 
         # Run Quarto render
         result = subprocess.run(
-            ["quarto", "render", "preview.qmd", "--quiet"],
+            [quarto.executable(), "render", "preview.qmd", "--quiet"],
             cwd=str(tmp_dir),
             capture_output=True,
             **TEXT_MODE_KWARGS,

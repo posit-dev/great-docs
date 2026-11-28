@@ -9,6 +9,16 @@
 --   direction="vertical" — Split direction: "horizontal" (default) or "vertical"
 --   start="30"           — Initial divider position in % (default: 50)
 
+--- Return nothing from a shortcode.
+---
+--- Quarto 2 has no `pandoc.Null`, so return no inlines there.
+local function nothing()
+    if pandoc.Null then
+        return pandoc.Null()
+    end
+    return pandoc.Inlines({})
+end
+
 return {
     ["compare"] = function(args, kwargs, meta)
         -- Helper: safely convert kwarg to string
@@ -23,7 +33,7 @@ return {
 
         if before == "" or after == "" then
             quarto.log.warning("gd-compare shortcode requires 'before' and 'after' images")
-            return pandoc.Null()
+            return nothing()
         end
 
         local label_before = str(kwargs["label-before"], "Before")

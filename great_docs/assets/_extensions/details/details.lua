@@ -68,13 +68,24 @@ local TYPE_ICONS = {
     danger  = "ban",
 }
 
+--- Return the directory holding this script, ending in a slash.
+---
+--- Quarto 2 omits Lua's `debug` library, so read the filter's path from
+--- `PANDOC_SCRIPT_FILE` instead.
+local function find_script_dir()
+    if debug then
+        return debug.getinfo(1, "S").source:match("@?(.*/)") or "./"
+    end
+    return (PANDOC_SCRIPT_FILE or ""):match("(.*/)") or "./"
+end
+
 --- Render a Lucide icon SVG by calling the icon helper script.
 --- Returns the SVG HTML string, or empty string on failure.
 local function render_icon(icon_name)
     if icon_name == "" then return "" end
 
     -- Locate the icon helper script in the sibling extension directory
-    local script_dir = debug.getinfo(1, "S").source:match("@?(.*/)") or "./"
+    local script_dir = find_script_dir()
     local helper = script_dir .. "../icon/_icon_shortcode.py"
 
     local cmd = "python3 '" ..

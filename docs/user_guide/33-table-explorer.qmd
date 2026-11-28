@@ -243,13 +243,13 @@ tbl_explorer(
 The `{{{< tbl-explorer >}}}` shortcode brings the interactive explorer to `.qmd` pages without
 writing any Python. The `file=` parameter specifies the data file path relative to the `.qmd` file:
 
-```{markdown}
-{{< tbl-explorer file="data/example.csv" >}}
+```markdown
+{{{< tbl-explorer file="data/example.csv" >}}}
 ```
 
 All parameters can be set as shortcode attributes:
 
-```{markdown}
+```markdown
 {{{< tbl-explorer file="data.csv" page_size="25" sortable="true" >}}}
 {{{< tbl-explorer file="data.csv" column_toggle="false" downloadable="false" >}}}
 {{{< tbl-explorer file="data.csv" columns="name,department,salary" >}}}

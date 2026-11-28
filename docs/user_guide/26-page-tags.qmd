@@ -17,6 +17,7 @@ Great Docs lets you categorize pages with tags for improved discoverability. Add
 guide, recipe, or custom section page via frontmatter, and Great Docs will generate a tags index
 page, render tag pills above page titles, and support hierarchical tag organization.
 
+```{=html}
 <style>
 .gd-demo-tag-pill, .gd-demo-tag-index, .gd-demo-tag-page-mock {
   font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -112,6 +113,7 @@ body.quarto-dark .gd-demo-tag-seg-child { background-color: rgba(107,114,128,0.0
 }
 body.quarto-dark .gd-demo-tag-seg-sep { background-color: rgba(107,114,128,0.4); }
 </style>
+```
 
 Tags are disabled by default. To enable them, add a `tags` section to `great-docs.yml`:
 

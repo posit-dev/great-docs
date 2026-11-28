@@ -141,6 +141,16 @@ local function ensure_dependency()
     })
 end
 
+--- Return nothing from a shortcode.
+---
+--- Quarto 2 has no `pandoc.Null`, so return no inlines there.
+local function nothing()
+    if pandoc.Null then
+        return pandoc.Null()
+    end
+    return pandoc.Inlines({})
+end
+
 return {
     ["termshow"] = function(args, kwargs, meta)
         -- Ensure player assets are included in the page
@@ -155,7 +165,7 @@ return {
         end
         if file == "" then
             quarto.log.warning("[termshow] 'file' attribute is required")
-            return pandoc.Null()
+            return nothing()
         end
 
         -- A bundle, or the rendered output directory

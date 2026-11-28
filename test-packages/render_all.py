@@ -16,6 +16,9 @@ The script:
   4. Injects a top navigation bar into every HTML file
   5. Creates a GDG index page at _rendered/_hub/index.html
   6. Starts a local HTTP server on port 3333
+
+Set `GDG_RENDERED_DIR` to build into another directory than `_rendered`, such as
+a separate one for sites rendered with Quarto 2 (`make q2-hub-build`).
 """
 
 from __future__ import annotations
@@ -69,7 +72,7 @@ from great_docs._project.layout import Layout
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-RENDERED_DIR = _THIS_DIR / "_rendered"
+RENDERED_DIR = Path(os.environ.get("GDG_RENDERED_DIR") or _THIS_DIR / "_rendered").resolve()
 HUB_DIR = RENDERED_DIR / "_hub"
 LOGS_DIR = RENDERED_DIR / "_logs"
 STATE_FILE = RENDERED_DIR / "_build_state.json"
