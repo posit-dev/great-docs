@@ -12088,7 +12088,8 @@ def test_DED_heading_anchors_cover_section_h1s_and_copy_links():
     Pages load the script that anchors section h1 headings and copies anchor links
 
     The site's heading shift makes top-level sections h1 headings, which Quarto leaves
-    without anchors. The confirmation keeps the icon visible after a click.
+    without anchors. The confirmation keeps the icon visible after a click, and the click
+    updates the address bar without scrolling to the heading or adding a history entry.
     """
     pkg = "gdtest_index_frontmatter"
     if not _has_rendered_site(pkg):
@@ -12104,6 +12105,8 @@ def test_DED_heading_anchors_cover_section_h1s_and_copy_links():
     script = (site / "heading-anchors.js").read_text(encoding="utf-8")
     assert "main section.level1[id] > h1:not(.no-anchor)" in script
     assert "navigator.clipboard.writeText" in script
+    assert "event.preventDefault()" in script
+    assert "history.replaceState(history.state" in script
 
     css = _deployed_css(pkg)
     assert css, "No CSS files found in _site"
